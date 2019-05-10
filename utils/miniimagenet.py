@@ -1,5 +1,5 @@
 from torchvision.transforms import transforms
-from MiniImageNet_MAML import MiniImagenet
+from MiniImageNet import MiniImagenet
 
 transform = transforms.Compose([lambda x: x.convert('RGB'),
                                 transforms.Resize((84, 84)),

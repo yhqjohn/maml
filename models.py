@@ -1,8 +1,7 @@
-import  torch
-from    torch import nn
-from    torch.nn import functional as F
-import  numpy as np
-
+import torch
+from torch import nn
+from torch.nn import functional as F
+import numpy as np
 
 
 class Learner(nn.Module):
@@ -10,7 +9,7 @@ class Learner(nn.Module):
 
     """
 
-    def __init__(self, config, imgc, imgsz):
+    def __init__(self, config, bn_training=True):
         """
 
         :param config: network config file, type:list of (string, list)
@@ -19,13 +18,13 @@ class Learner(nn.Module):
         """
         super(Learner, self).__init__()
 
-
         self.config = config
 
         # this dict contains all tensors needed to be optimized
         self.vars = nn.ParameterList()
         # running_mean and running_var
         self.vars_bn = nn.ParameterList()
+        self.bn_training = bn_training
 
         for i, (name, param) in enumerate(self.config):
             if name is 'conv2d':
@@ -74,39 +73,34 @@ class Learner(nn.Module):
             else:
                 raise NotImplementedError
 
-
-
-
-
-
     def extra_repr(self):
         info = ''
 
         for name, param in self.config:
             if name is 'conv2d':
-                tmp = 'conv2d:(ch_in:%d, ch_out:%d, k:%dx%d, stride:%d, padding:%d)'\
-                      %(param[1], param[0], param[2], param[3], param[4], param[5],)
+                tmp = 'conv2d:(ch_in:%d, ch_out:%d, k:%dx%d, stride:%d, padding:%d)' \
+                      % (param[1], param[0], param[2], param[3], param[4], param[5],)
                 info += tmp + '\n'
 
             elif name is 'convt2d':
-                tmp = 'convTranspose2d:(ch_in:%d, ch_out:%d, k:%dx%d, stride:%d, padding:%d)'\
-                      %(param[0], param[1], param[2], param[3], param[4], param[5],)
+                tmp = 'convTranspose2d:(ch_in:%d, ch_out:%d, k:%dx%d, stride:%d, padding:%d)' \
+                      % (param[0], param[1], param[2], param[3], param[4], param[5],)
                 info += tmp + '\n'
 
             elif name is 'linear':
-                tmp = 'linear:(in:%d, out:%d)'%(param[1], param[0])
+                tmp = 'linear:(in:%d, out:%d)' % (param[1], param[0])
                 info += tmp + '\n'
 
             elif name is 'leakyrelu':
-                tmp = 'leakyrelu:(slope:%f)'%(param[0])
+                tmp = 'leakyrelu:(slope:%f)' % (param[0])
                 info += tmp + '\n'
 
 
             elif name is 'avg_pool2d':
-                tmp = 'avg_pool2d:(k:%d, stride:%d, padding:%d)'%(param[0], param[1], param[2])
+                tmp = 'avg_pool2d:(k:%d, stride:%d, padding:%d)' % (param[0], param[1], param[2])
                 info += tmp + '\n'
             elif name is 'max_pool2d':
-                tmp = 'max_pool2d:(k:%d, stride:%d, padding:%d)'%(param[0], param[1], param[2])
+                tmp = 'max_pool2d:(k:%d, stride:%d, padding:%d)' % (param[0], param[1], param[2])
                 info += tmp + '\n'
             elif name in ['flatten', 'tanh', 'relu', 'upsample', 'reshape', 'sigmoid', 'use_logits', 'bn']:
                 tmp = name + ':' + str(tuple(param))
@@ -116,23 +110,7 @@ class Learner(nn.Module):
 
         return info
 
-
-
-    def forward(self, x, vars=None, bn_training=True):
-        """
-        This function can be called by finetunning, however, in finetunning, we dont wish to update
-        running_mean/running_var. Thought weights/bias of bn is updated, it has been separated by fast_weights.
-        Indeed, to not update running_mean/running_var, we need set update_bn_statistics=False
-        but weight/bias will be updated and not dirty initial theta parameters via fast_weiths.
-        :param x: [b, 1, 28, 28]
-        :param vars:
-        :param bn_training: set False to not update
-        :return: x, loss, likelihood, kld
-        """
-
-        if vars is None:
-            vars = self.vars
-
+    def functional(self, x, vars, bn_training=True):
         idx = 0
         bn_idx = 0
 
@@ -156,7 +134,7 @@ class Learner(nn.Module):
                 # print('forward:', idx, x.norm().item())
             elif name is 'bn':
                 w, b = vars[idx], vars[idx + 1]
-                running_mean, running_var = self.vars_bn[bn_idx], self.vars_bn[bn_idx+1]
+                running_mean, running_var = self.vars_bn[bn_idx], self.vars_bn[bn_idx + 1]
                 x = F.batch_norm(x, running_mean, running_var, weight=w, bias=b, training=bn_training)
                 idx += 2
                 bn_idx += 2
@@ -189,9 +167,20 @@ class Learner(nn.Module):
         assert idx == len(vars)
         assert bn_idx == len(self.vars_bn)
 
-
         return x
 
+    def forward(self, x):
+        """
+        This function can be called by finetunning, however, in finetunning, we dont wish to update
+        running_mean/running_var. Thought weights/bias of bn is updated, it has been separated by fast_weights.
+        Indeed, to not update running_mean/running_var, we need set update_bn_statistics=False
+        but weight/bias will be updated and not dirty initial theta parameters via fast_weiths.
+        :param x: [b, 1, 28, 28]
+        :param vars:
+        :param bn_training: set False to not update
+        :return: x, loss, likelihood, kld
+        """
+        return self.functional(x, self.vars, self.training and self.bn_training)
 
     def zero_grad(self, vars=None):
         """
