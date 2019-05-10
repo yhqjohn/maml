@@ -26,14 +26,14 @@ class NWaySampler(Sampler):
             for i in n_way_idx_list:
                 self.generator.shuffle(i)
 
-            p_arr = np.array([len(i) for i in n_way_idx_list])
-            p_arr[p_arr <= batchsize] = 0
+            p_arr = np.array([len(i) for i in n_way_idx_list], dtype=float)
+            p_arr[p_arr < batchsize] = 0
             while p_arr.any():
                 p_arr = (lambda x: x/x.sum())(p_arr)    # normalize to sum 1
                 class_id = self.generator.choice(len(n_way_idx_list), p=p_arr)
                 yield [n_way_idx_list[class_id].pop(-1) for i in range(batchsize)]
-                p_arr = np.array([len(i) for i in n_way_idx_list])
-                p_arr[p_arr <= batchsize] = 0
+                p_arr = np.array([len(i) for i in n_way_idx_list], dtype=float)
+                p_arr[p_arr < batchsize] = 0
 
         sample_list = np.asarray([i for i in batch_sampler(self.label2idx)])
         sample_list = sample_list[:len(sample_list)//self.n_way*self.n_way]

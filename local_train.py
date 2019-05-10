@@ -2,13 +2,10 @@ import torch
 import torch.distributed as dist
 
 from math import ceil
-from random import Random
 from torch.multiprocessing import Process
 from torch.utils.data import DataLoader
-from torchvision import datasets, transforms
 
 import argparse
-from torch.utils import data
 import os
 import numpy as np
 
