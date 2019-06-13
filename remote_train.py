@@ -163,17 +163,12 @@ if __name__ == "__main__":
     parser.add_argument('--update_step_test', type=int, help='update steps for finetunning', default=10)
     parser.add_argument('--no_cuda', type=bool, help='use CPU', default=False)
     parser.add_argument('--world_size', type=int, help='world size of parallelism', default=2)
+    parser.add_argument('--rank', type=int, help='rank', default=0)
     parser.add_argument('--addr', type=str, help='master address', default='127.0.0.1')
     parser.add_argument('--port', type=str, help='master port', default='29500')
     args = parser.parse_args()
     print(args)
     size = args.world_size
-    processes = []
-    for rank in range(size):
-        p = Process(target=init_processes, args=(rank, size, run, args), kwargs={'addr': args.addr, 'port': args.port})
-        p.start()
-        processes.append(p)
-
-    for p in processes:
-        p.join()
+    rank = args.rank
+    init_processes(rank, size, run, args, addr=args.addr, port=args.port)
 

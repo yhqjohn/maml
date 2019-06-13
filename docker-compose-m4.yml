@@ -1,0 +1,36 @@
+version: "2.3"
+services:
+  rank0:
+    image: mini
+    runtime: nvidia
+    networks:
+      bridge:
+        ipv4_address: 10.1.0.10
+    command: python remote_train.py --rank 0 --world_size 4 --addr 10.1.0.10 --port 23456
+  rank1:
+    image: mini
+    runtime: nvidia
+    networks:
+      bridge:
+        ipv4_address: 10.1.0.11
+    command: python remote_train.py --rank 1 --world_size 4 --addr 10.1.0.10 --port 23456
+  rank2:
+    image: mini
+    runtime: nvidia
+    networks:
+      bridge:
+        ipv4_address: 10.1.0.12
+    command: python remote_train.py --rank 2 --world_size 4 --addr 10.1.0.10 --port 23456
+  rank3:
+    image: mini
+    runtime: nvidia
+    networks:
+      bridge:
+        ipv4_address: 10.1.0.13
+    command: python remote_train.py --rank 3 --world_size 4 --addr 10.1.0.10 --port 23456
+networks:
+  bridge:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.1.0.0/16
