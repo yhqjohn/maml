@@ -2,7 +2,8 @@ import torch
 import torch.distributed as dist
 
 from torch.multiprocessing import Process
-from torch.utils.data import DataLoader, DistributedSampler
+from torch.utils.data import DataLoader
+from torch.utils.data._utils.collate import default_collate as collate
 
 import argparse
 import os
@@ -10,9 +11,9 @@ import numpy as np
 
 from maml import Meta
 from models import get_cnn
+from utils.data import task_loader
 from metann import Learner
-
-from MiniImagenet import MiniImagenet
+import learn2learn as l2l
 
 
 def average_gradients(model):
@@ -58,12 +59,13 @@ def run(rank, size, args):
     ]
 
 
-    mini = MiniImagenet('./miniimagenet/', mode='train', n_way=args.n_way, k_shot=args.k_shot,
-                        k_query=args.k_query,
-                        batchsz=10000, resize=args.imgsz) #要改
-    mini_test = MiniImagenet('./miniimagenet/', mode='test', n_way=args.n_way, k_shot=args.k_shot,
-                             k_query=args.k_query,
-                             batchsz=100, resize=args.imgsz) #要改
+    train_dataset = l2l.vision.datasets.MiniImagenet(root='./data', mode='train')
+    # valid_dataset = l2l.vision.datasets.MiniImagenet(root='./data', mode='validation')
+    test_dataset = l2l.vision.datasets.MiniImagenet(root='./data', mode='test')
+    # train_loader = task_loader(train_dataset, args.n_way, args.k_shot, args.k_query, 10000,
+    #                            batch_size=args.task_num//args.world_size)
+    # test_loader = task_loader(test_dataset, args.n_way, args.k_shot, args.k_query, 1024,
+    #                            batch_size=args.task_num//args.world_size)
 
     net = get_cnn(config) #要改
     model = Meta(update_lr=args.update_lr, meta_lr=args.meta_lr, update_step=args.update_step,
@@ -82,11 +84,11 @@ def run(rank, size, args):
     for epoch in range(args.epoch // 10000):
         epoch_loss = 0.0
         average_model(model)
-        train_iter = DataLoader(mini, args.task_num//args.world_size, num_workers=args.world_size, sampler=DistributedSampler(mini), pin_memory=True)
-        for step, data in enumerate(train_iter):
+        train_loader = task_loader(train_dataset, args.n_way, args.k_shot, args.k_query, 10000,
+                                   batch_size=args.task_num // args.world_size)
+        for step, data in enumerate(train_loader):
             # data = tuple(map(lambda x: slc(to_device(relabel(x), device)), data))
-            data = [i.to(device) for i in data]
-            data = list(zip(*data))
+            data = [[x.to(device) for x in collate(a) + collate(b)] for a, b in data]
             optimizer.zero_grad()
             if step * args.task_num % 120 == 0:
                 with model.logging:
@@ -104,16 +106,16 @@ def run(rank, size, args):
             # if epoch % 5 == 0:  # evaluation
             if step * args.task_num % 2000 == 0:
                 accs_all_test = []
-                db_test = DataLoader(mini_test, 1, shuffle=True, num_workers=1, pin_memory=True)
+                test_loader = task_loader(test_dataset, args.n_way, args.k_shot, args.k_query, 1024,
+                                          batch_size=args.task_num // args.world_size)
                 model.eval()
-                optimizer.zero_grad()
-                for data_test in db_test:
-                    data_test = [i.to(device) for i in data_test]
-                    data_test = list(zip(*data_test))
+                for data_test in test_loader:
+                    data_test = [[x.to(device) for x in collate(a) + collate(b)] for a, b in data_test]
                     with model.logging:
                         # data_test = tuple(map(lambda x: slc(to_device(relabel(x), device)), data_test))
                         loss = model(data_test)
-                        accs = model.accs()
+                        loss.backward()
+                        # accs = model.accs()
                         accs_all_test.append(model.log['corrects'])
                         optimizer.zero_grad()
 
@@ -123,6 +125,7 @@ def run(rank, size, args):
                       dist.get_rank(), ', epoch ', epoch, ': ',
                       'Test acc:', accs)
                 optimizer.zero_grad()
+                del data_test
                 model.train()
 
 
@@ -140,16 +143,13 @@ if __name__ == "__main__":
     parser.add_argument('--n_way', type=int, help='n way', default=5)
     parser.add_argument('--k_shot', type=int, help='k shot for support set', default=1)
     parser.add_argument('--k_query', type=int, help='k shot for query set', default=15)
-    parser.add_argument('--batch_size', type=int, help='meta batch size', default=2)
-    parser.add_argument('--imgsz', type=int, help='imgsz', default=84)
-    parser.add_argument('--imgc', type=int, help='imgc', default=3)
     parser.add_argument('--task_num', type=int, help='meta batch size, namely task num', default=4)
     parser.add_argument('--meta_lr', type=float, help='meta-level outer learning rate', default=1e-3)
     parser.add_argument('--update_lr', type=float, help='task-level inner update learning rate', default=0.01)
     parser.add_argument('--update_step', type=int, help='task-level inner update steps', default=5)
     parser.add_argument('--update_step_test', type=int, help='update steps for finetunning', default=10)
     parser.add_argument('--device', type=str, help='use CPU', default='cuda')
-    parser.add_argument('--world_size', type=int, help='world size of parallelism', default=2)
+    parser.add_argument('--world_size', type=int, help='world size of parallelism', default=1)
     parser.add_argument('--rank', type=int, help='rank', default=0)
     parser.add_argument('--addr', type=str, help='master address', default='127.0.0.1')
     parser.add_argument('--port', type=str, help='master port', default='29500')

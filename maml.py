@@ -8,7 +8,7 @@ def correct_fn(x, y, dim=1):
     with torch.no_grad():
         predict = F.softmax(x, dim=dim).argmax(dim=dim)
         _correct = torch.eq(predict, y).float().mean()
-    return _correct
+    return _correct.item()
 
 
 def clip_grad_by_norm_(grad, max_norm):
@@ -117,7 +117,7 @@ class Meta(nn.Module):
                     with torch.no_grad():
                         correct = correct_fn(self.F(fast_weights, True, query_x), query_y)
                     # correct = correct_fn(logits, support_y)
-                    corrects.append(correct.item())
+                    corrects.append(correct)
                     losses.append(fast_loss.item())
 
                     grad = torch.autograd.grad(fast_loss, fast_weights, create_graph=True)
@@ -128,7 +128,7 @@ class Meta(nn.Module):
                     fast_loss = self.criterion(logits, support_y)
                     correct = correct_fn(self.F(fast_weights, True, query_x), query_y)
                 # correct = correct_fn(logits, support_y)
-                corrects.append(correct.item())
+                corrects.append(correct)
                 losses.append(fast_loss.item())
 
                 loss += self.criterion(self.F(fast_weights, True, query_x), query_y)
