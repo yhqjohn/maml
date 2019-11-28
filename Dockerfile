@@ -7,5 +7,7 @@ RUN pip install torchvision\
 ENV GLOO_SOCKET_IFNAME=eth0
 
 WORKDIR /work
-COPY miniimagenet ./miniimagenet
+COPY data ./data
+COPY utils ./utils
+COPY vision ./vision
 COPY maml.py models.py MiniImagenet.py models.py remote_train.py ./
