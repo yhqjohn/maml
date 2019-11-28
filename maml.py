@@ -54,23 +54,18 @@ class Meta(nn.Module):
     Meta Learner
     """
 
-    def __init__(self, args, learner, criterion=nn.CrossEntropyLoss(), logging=False):
+    def __init__(self, update_lr, meta_lr, update_step, update_step_test,
+                 learner, criterion=nn.CrossEntropyLoss(), logging=False):
         """
 
         :param args:
         """
         super(Meta, self).__init__()
 
-        self.update_lr = args.update_lr  #
-        self.meta_lr = args.meta_lr  #
-        self.n_way = args.n_way  # N-way problem mentioned in the Section 5.2 of the article.
-        self.k_shot = args.k_shot
-        self.k_query = args.k_query
-        # self.k_shot = args.k_spt
-        # self.k_query = args.k_qry
-        self.task_num = args.task_num
-        self.update_step = args.update_step
-        self.update_step_test = args.update_step_test
+        self.update_lr = update_lr  #
+        self.meta_lr = meta_lr  #
+        self.update_step = update_step
+        self.update_step_test = update_step_test
 
         self.logging = Logging(logging)
         self.meta_training = True

@@ -6,6 +6,8 @@ services:
     networks:
       bridge:
         ipv4_address: 10.1.0.10
+    environment:
+      - "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}"
     command: python remote_train.py --rank 0 --world_size 2 --addr 10.1.0.10 --port 23456
   rank1:
     image: mini
@@ -13,6 +15,8 @@ services:
     networks:
       bridge:
         ipv4_address: 10.1.0.11
+    environment:
+      - "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}"
     command: python remote_train.py --rank 1 --world_size 2 --addr 10.1.0.10 --port 23456
 networks:
   bridge:

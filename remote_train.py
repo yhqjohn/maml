@@ -34,8 +34,7 @@ def average_model(model):
 def run(rank, size, args):
     """ Distributed Synchronous SGD Example """
 
-    use_cuda = torch.cuda.is_available() and not args.no_cuda
-    device = torch.device('cuda' if use_cuda else 'cpu')
+    device = torch.device(args.device)
 
     config = [
         ('conv2d', [3, 32, 3]),
@@ -58,29 +57,17 @@ def run(rank, size, args):
         ('linear', [32 * 5 * 5, 5]),
     ]
 
-    # train_set = miniimagenet.trainset()
-    # batch_sampler = NWaySampler(train_set, args.k_shot+args.k_query, args.n_way, replace=False)
-    # batch_sampler = DistributedBatchSampler(train_set, batch_sampler)
-    # train_loader = DataLoader(train_set, batch_sampler=batch_sampler, num_workers=args.world_size)
-    #
-    # test_set = miniimagenet.testset()
-    # test_batch_sampler = NWaySampler(test_set, args.k_shot+args.k_query, args.n_way, replace=False)
-    # test_batch_sampler = DistributedBatchSampler(test_set, test_batch_sampler)
-    # test_loader = DataLoader(test_set, batch_sampler=test_batch_sampler, num_workers=args.world_size)
-    #
-    # slc = NWaySlice(args.k_shot, args.k_query, args.n_way)
 
     mini = MiniImagenet('./miniimagenet/', mode='train', n_way=args.n_way, k_shot=args.k_shot,
                         k_query=args.k_query,
-                        batchsz=10000, resize=args.imgsz)
+                        batchsz=10000, resize=args.imgsz) #要改
     mini_test = MiniImagenet('./miniimagenet/', mode='test', n_way=args.n_way, k_shot=args.k_shot,
                              k_query=args.k_query,
-                             batchsz=100, resize=args.imgsz)
+                             batchsz=100, resize=args.imgsz) #要改
 
-    # net = CNN(config).to(device)
-    net = get_cnn(config)
-    net = Learner(net)
-    model = Meta(args, net).to(device)
+    net = get_cnn(config) #要改
+    model = Meta(update_lr=args.update_lr, meta_lr=args.meta_lr, update_step=args.update_step,
+                 update_step_test=args.update_step_test, learner=Learner(net)).to(device)
     average_model(model)
     optimizer = model.meta_optim
 
@@ -161,7 +148,7 @@ if __name__ == "__main__":
     parser.add_argument('--update_lr', type=float, help='task-level inner update learning rate', default=0.01)
     parser.add_argument('--update_step', type=int, help='task-level inner update steps', default=5)
     parser.add_argument('--update_step_test', type=int, help='update steps for finetunning', default=10)
-    parser.add_argument('--no_cuda', type=bool, help='use CPU', default=False)
+    parser.add_argument('--device', type=str, help='use CPU', default='cuda')
     parser.add_argument('--world_size', type=int, help='world size of parallelism', default=2)
     parser.add_argument('--rank', type=int, help='rank', default=0)
     parser.add_argument('--addr', type=str, help='master address', default='127.0.0.1')
