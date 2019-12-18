@@ -100,7 +100,8 @@ class Meta(nn.Module):
                         fast_loss = self.criterion(logits, support_y)
                         grad = torch.autograd.grad(fast_loss, fast_weights, create_graph=enable_grad)
                         fast_weights = [a-self.update_lr*b for a, b in zip(fast_weights, grad)]
-                    loss += self.criterion(self.F(fast_weights, True, query_x), query_y).requires_grad_(enable_grad)
+                        with torch.set_grad_enabled(enable_grad):
+                            loss += self.criterion(self.F(fast_weights, True, query_x), query_y)
                 return loss / len(x)
             else:
                 # log the losses and correctness
@@ -133,8 +134,8 @@ class Meta(nn.Module):
                     corrects.append(correct)
                     losses.append(fast_loss.item())
 
-                    loss += self.criterion(self.F(fast_weights, True, query_x), query_y).requires_grad_(enable_grad)
-
+                    with torch.set_grad_enabled(enable_grad):
+                        loss += self.criterion(self.F(fast_weights, True, query_x), query_y)
                     # log the correctness
                     batch_correctness.append(corrects)
                     batch_losses.append(losses)
