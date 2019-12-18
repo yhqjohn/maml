@@ -86,63 +86,63 @@ class Meta(nn.Module):
         set.
         :return:    the loss of the query set classifying.
         """
-        loss = torch.tensor(0.).requires_grad_().cuda()
+        enable_grad = torch.is_grad_enabled()
+        loss = torch.tensor(0.).requires_grad_(enable_grad).cuda()
         steps = self.update_step if self.meta_training else self.update_step_test
-        if not self.logging.is_logging:
-            # without logging the algorithm is quite simple and elegant
-            for i in x:
-                support_x, support_y, query_x, query_y = i
-                fast_weights = list(self.learner.parameters())
-                for j in range(steps):
-                    with torch.enable_grad():
+        with torch.enable_grad():
+            if not self.logging.is_logging:
+                # without logging the algorithm is quite simple and elegant
+                for i in x:
+                    support_x, support_y, query_x, query_y = i
+                    fast_weights = list(self.learner.parameters())
+                    for j in range(steps):
                         logits = self.F(fast_weights, True, support_x)
                         fast_loss = self.criterion(logits, support_y)
-                    grad = torch.autograd.grad(fast_loss, fast_weights, create_graph=True)
-                    fast_weights = [a-self.update_lr*b for a, b in zip(fast_weights, grad)]
-                loss += self.criterion(self.F(fast_weights, True, query_x), query_y)
-            return loss / len(x)
-        else:
-            # log the losses and correctness
-            batch_correctness = []
-            batch_losses = []
-            for i in x:
-                support_x, support_y, query_x, query_y = i
-                fast_weights = list(self.learner.parameters())
-                corrects = []
-                losses = []
-                for j in range(steps):
-                    with torch.enable_grad():
+                        grad = torch.autograd.grad(fast_loss, fast_weights, create_graph=enable_grad)
+                        fast_weights = [a-self.update_lr*b for a, b in zip(fast_weights, grad)]
+                    loss += self.criterion(self.F(fast_weights, True, query_x), query_y).requires_grad_(enable_grad)
+                return loss / len(x)
+            else:
+                # log the losses and correctness
+                batch_correctness = []
+                batch_losses = []
+                for i in x:
+                    support_x, support_y, query_x, query_y = i
+                    fast_weights = list(self.learner.parameters())
+                    corrects = []
+                    losses = []
+                    for j in range(steps):
                         logits = self.F(fast_weights, True, support_x)
                         fast_loss = self.criterion(logits, support_y)
 
+                        # log the correctness
+                        with torch.no_grad():
+                            correct = correct_fn(self.F(fast_weights, True, query_x), query_y)
+                        # correct = correct_fn(logits, support_y)
+                        corrects.append(correct)
+                        losses.append(fast_loss.item())
+
+                        grad = torch.autograd.grad(fast_loss, fast_weights, create_graph=enable_grad)
+                        fast_weights = [a-self.update_lr*b for a, b in zip(fast_weights, grad)]
+
                     # log the correctness
                     with torch.no_grad():
+                        fast_loss = self.criterion(logits, support_y)
                         correct = correct_fn(self.F(fast_weights, True, query_x), query_y)
                     # correct = correct_fn(logits, support_y)
                     corrects.append(correct)
                     losses.append(fast_loss.item())
 
-                    grad = torch.autograd.grad(fast_loss, fast_weights, create_graph=True)
-                    fast_weights = [a-self.update_lr*b for a, b in zip(fast_weights, grad)]
+                    loss += self.criterion(self.F(fast_weights, True, query_x), query_y).requires_grad_(enable_grad)
+
+                    # log the correctness
+                    batch_correctness.append(corrects)
+                    batch_losses.append(losses)
 
                 # log the correctness
-                with torch.no_grad():
-                    fast_loss = self.criterion(logits, support_y)
-                    correct = correct_fn(self.F(fast_weights, True, query_x), query_y)
-                # correct = correct_fn(logits, support_y)
-                corrects.append(correct)
-                losses.append(fast_loss.item())
-
-                loss += self.criterion(self.F(fast_weights, True, query_x), query_y)
-
-                # log the correctness
-                batch_correctness.append(corrects)
-                batch_losses.append(losses)
-
-            # log the correctness
-            self.log['corrects'] = batch_correctness
-            self.log['losses'] = batch_losses
-            return loss/len(x)
+                self.log['corrects'] = batch_correctness
+                self.log['losses'] = batch_losses
+                return loss/len(x)
 
     def train(self, mode=True):
         self.meta_training = mode
