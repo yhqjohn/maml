@@ -94,8 +94,9 @@ class Meta(nn.Module):
                 support_x, support_y, query_x, query_y = i
                 fast_weights = list(self.learner.parameters())
                 for j in range(steps):
-                    logits = self.F(fast_weights, True, support_x)
-                    fast_loss = self.criterion(logits, support_y)
+                    with torch.enable_grad():
+                        logits = self.F(fast_weights, True, support_x)
+                        fast_loss = self.criterion(logits, support_y)
                     grad = torch.autograd.grad(fast_loss, fast_weights, create_graph=True)
                     fast_weights = [a-self.update_lr*b for a, b in zip(fast_weights, grad)]
                 loss += self.criterion(self.F(fast_weights, True, query_x), query_y)
@@ -110,8 +111,9 @@ class Meta(nn.Module):
                 corrects = []
                 losses = []
                 for j in range(steps):
-                    logits = self.F(fast_weights, True, support_x)
-                    fast_loss = self.criterion(logits, support_y)
+                    with torch.enable_grad():
+                        logits = self.F(fast_weights, True, support_x)
+                        fast_loss = self.criterion(logits, support_y)
 
                     # log the correctness
                     with torch.no_grad():
